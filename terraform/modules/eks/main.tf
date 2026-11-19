@@ -92,6 +92,14 @@ resource "aws_eks_cluster" "main" {
     public_access_cidrs     = var.public_access_cidrs
   }
 
+  # NEW: how people/roles get access to Kubernetes objects.
+  # Must match the mode the live cluster uses today, otherwise Terraform
+  # will try to change it. Do NOT add bootstrap_cluster_creator_admin_permissions
+  # here: on an existing cluster it forces the cluster to be replaced.
+  access_config {
+    authentication_mode = var.authentication_mode
+  }
+
   enabled_cluster_log_types = ["api", "audit", "authenticator"]
 
   tags       = merge(var.tags, { Name = var.cluster_name })
@@ -141,4 +149,28 @@ resource "aws_iam_openid_connect_provider" "eks" {
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
   tags            = var.tags
+}
+
+# ── NEW: Cluster access (EKS access entries) ──────────────────────────────────
+# Gives each listed IAM user/role admin access to the cluster, so they can see
+# nodes in the console and run kubectl. Do not list the identity that created
+# the cluster: it already has an automatic access entry (adding it conflicts).
+resource "aws_eks_access_entry" "admin" {
+  for_each      = toset(var.admin_principal_arns)
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "admin" {
+  for_each      = toset(var.admin_principal_arns)
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.admin]
 }
