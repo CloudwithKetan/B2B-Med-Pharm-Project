@@ -58,3 +58,19 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+# NEW: how people/roles get access to Kubernetes objects.
+# Must match the mode the live cluster uses today.
+variable "authentication_mode" {
+  type        = string
+  default     = "API_AND_CONFIG_MAP"
+  description = "EKS access mode: CONFIG_MAP, API_AND_CONFIG_MAP or API"
+}
+
+# NEW: IAM users/roles that get cluster admin through EKS access entries.
+# Do not list the identity that created the cluster (it already has access).
+variable "admin_principal_arns" {
+  type        = list(string)
+  default     = []
+  description = "IAM users/roles that get cluster admin through EKS access entries"
+}
